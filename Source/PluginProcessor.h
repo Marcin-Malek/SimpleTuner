@@ -64,11 +64,10 @@ private:
     void pushNextSampleIntoFifo(float sample);
     void findFundamental();
 
-    static constexpr auto fftOrder = 16;
+    static constexpr auto fftOrder = 15;
     static constexpr auto fftSize = 1 << fftOrder;
 
     juce::dsp::FFT forwardFFT;
-    bool nextFFTBlockReady;
     float fftData[2 * fftSize];
     float fundamentalFrequency;
     float fifo[fftSize];

@@ -24,7 +24,6 @@ SimpleTunerAudioProcessor::SimpleTunerAudioProcessor()
                         fifo{},
                         fftData{},
                         fundamentalFrequency(0),
-                        nextFFTBlockReady(false),
                         fifoIndex(0)
 #endif
 {
@@ -155,8 +154,6 @@ void SimpleTunerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         // Since it is a tuner plugin only mono signal is needed
         pushNextSampleIntoFifo(buffer.getReadPointer(0)[i]);
     }
-
-    findFundamental();
 }
 
 float SimpleTunerAudioProcessor::getFundamental() {
@@ -166,13 +163,9 @@ float SimpleTunerAudioProcessor::getFundamental() {
 void SimpleTunerAudioProcessor::pushNextSampleIntoFifo(float sample) {
     if (fifoIndex == fftSize)
     {
-        if (!nextFFTBlockReady)
-        {
-            juce::zeromem(fftData, sizeof(fftData));
-            memcpy(fftData, fifo, sizeof(fifo));
-            nextFFTBlockReady = true;
-        }
-
+        juce::zeromem(fftData, sizeof(fftData));
+        memcpy(fftData, fifo, sizeof(fifo));
+        findFundamental();
         fifoIndex = 0;
     }
 
@@ -181,22 +174,18 @@ void SimpleTunerAudioProcessor::pushNextSampleIntoFifo(float sample) {
 
 void SimpleTunerAudioProcessor::findFundamental()
 {
-    if (nextFFTBlockReady)
-    {
-        forwardFFT.performFrequencyOnlyForwardTransform(fftData);
+    forwardFFT.performFrequencyOnlyForwardTransform(fftData);
 
-        float maxMagnitude = 0.0f;
-        int peakFrequencyIndex = 0;
+    float maxMagnitude = 0.0f;
+    int peakFrequencyIndex = 0;
 
-        for (int i = 0; i < fftSize * 2; ++i) {
-            if (fftData[i] > maxMagnitude) {
-                maxMagnitude = fftData[i];
-                peakFrequencyIndex = i;
-            }
+    for (int i = 0; i < fftSize * 2; ++i) {
+        if (fftData[i] > maxMagnitude) {
+            maxMagnitude = fftData[i];
+            peakFrequencyIndex = i;
         }
-        fundamentalFrequency = peakFrequencyIndex * getSampleRate() / fftSize;
-        nextFFTBlockReady = false;
     }
+    fundamentalFrequency = peakFrequencyIndex * getSampleRate() / fftSize;
 }
 
 //==============================================================================
