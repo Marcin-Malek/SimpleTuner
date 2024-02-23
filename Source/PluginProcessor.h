@@ -56,7 +56,22 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    float getFundamental();
+
 private:
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleTunerAudioProcessor)
+    void pushNextSampleIntoFifo(float sample);
+    void findFundamental();
+
+    static constexpr auto fftOrder = 16;
+    static constexpr auto fftSize = 1 << fftOrder;
+
+    juce::dsp::FFT forwardFFT;
+    bool nextFFTBlockReady;
+    float fftData[2 * fftSize];
+    float fundamentalFrequency;
+    float fifo[fftSize];
+    int fifoIndex;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SimpleTunerAudioProcessor);
 };

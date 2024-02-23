@@ -1,7 +1,7 @@
 /*
   ==============================================================================
 
-    This file contains the basic framework code for a JUCE plugin editor.
+	This file contains the basic framework code for a JUCE plugin editor.
 
   ==============================================================================
 */
@@ -10,24 +10,21 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "DisplayFreqComponent.h"
 
 //==============================================================================
-/**
-*/
-class SimpleTunerAudioProcessorEditor  : public juce::AudioProcessorEditor
+class SimpleTunerAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
-    SimpleTunerAudioProcessorEditor (SimpleTunerAudioProcessor&);
-    ~SimpleTunerAudioProcessorEditor() override;
+	SimpleTunerAudioProcessorEditor(SimpleTunerAudioProcessor&);
+	~SimpleTunerAudioProcessorEditor() override;
 
-    //==============================================================================
-    void paint (juce::Graphics&) override;
-    void resized() override;
+	void paint(juce::Graphics&) override;
+	void resized() override;
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
-    SimpleTunerAudioProcessor& audioProcessor;
+	SimpleTunerAudioProcessor& audioProcessor;
+	DisplayFreqComponent displayFreqComponent;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleTunerAudioProcessorEditor)
+	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SimpleTunerAudioProcessorEditor)
 };

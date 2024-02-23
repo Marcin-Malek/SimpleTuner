@@ -19,7 +19,13 @@ SimpleTunerAudioProcessor::SimpleTunerAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+                        forwardFFT(fftOrder),
+                        fifo{},
+                        fftData{},
+                        fundamentalFrequency(0),
+                        nextFFTBlockReady(false),
+                        fifoIndex(0)
 #endif
 {
 }
@@ -91,7 +97,7 @@ void SimpleTunerAudioProcessor::changeProgramName (int index, const juce::String
 }
 
 //==============================================================================
-void SimpleTunerAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void SimpleTunerAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
@@ -129,10 +135,10 @@ bool SimpleTunerAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 }
 #endif
 
-void SimpleTunerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void SimpleTunerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
+    auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
     // In case we have more outputs than inputs, this code clears any output
@@ -141,20 +147,55 @@ void SimpleTunerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     // This is here to avoid people getting screaming feedback
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+	for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i) {
+		buffer.clear(i, 0, buffer.getNumSamples());
+	}
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    for (auto i = 0; i < buffer.getNumSamples(); ++i) {
+        // Since it is a tuner plugin only mono signal is needed
+        pushNextSampleIntoFifo(buffer.getReadPointer(0)[i]);
+    }
+
+    findFundamental();
+}
+
+float SimpleTunerAudioProcessor::getFundamental() {
+    return fundamentalFrequency;
+}
+
+void SimpleTunerAudioProcessor::pushNextSampleIntoFifo(float sample) {
+    if (fifoIndex == fftSize)
     {
-        auto* channelData = buffer.getWritePointer (channel);
+        if (!nextFFTBlockReady)
+        {
+            juce::zeromem(fftData, sizeof(fftData));
+            memcpy(fftData, fifo, sizeof(fifo));
+            nextFFTBlockReady = true;
+        }
 
-        // ..do something to the data...
+        fifoIndex = 0;
+    }
+
+    fifo[fifoIndex++] = sample;
+}
+
+void SimpleTunerAudioProcessor::findFundamental()
+{
+    if (nextFFTBlockReady)
+    {
+        forwardFFT.performFrequencyOnlyForwardTransform(fftData);
+
+        float maxMagnitude = 0.0f;
+        int peakFrequencyIndex = 0;
+
+        for (int i = 0; i < fftSize * 2; ++i) {
+            if (fftData[i] > maxMagnitude) {
+                maxMagnitude = fftData[i];
+                peakFrequencyIndex = i;
+            }
+        }
+        fundamentalFrequency = peakFrequencyIndex * getSampleRate() / fftSize;
+        nextFFTBlockReady = false;
     }
 }
 
