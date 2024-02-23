@@ -15,7 +15,7 @@
 #include <JuceHeader.h>
 
 //==============================================================================
-class DisplayFreqComponent : public juce::Component, public juce::Timer
+class DisplayFreqComponent : public juce::Component, public juce::MidiMessage, public juce::Timer
 {
 public:
 	DisplayFreqComponent(SimpleTunerAudioProcessor&);

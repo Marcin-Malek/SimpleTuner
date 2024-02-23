@@ -28,9 +28,11 @@ void DisplayFreqComponent::timerCallback()
 
 void DisplayFreqComponent::paint(juce::Graphics& g)
 {
+    int midiNoteNumber = (int)((12 * log(audioProcessor.getFundamental() / 220.0) / log(2.0)) + 57.01);
+    juce::String midiNote = getMidiNoteName(midiNoteNumber, true, true, 4);
     g.setColour(juce::Colours::white);
     g.setFont(15.0f);
-    g.drawFittedText(juce::String(audioProcessor.getFundamental()), getLocalBounds(), juce::Justification::centred, 1);
+    g.drawFittedText(midiNote + " " + juce::String(audioProcessor.getFundamental()), getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void DisplayFreqComponent::resized()
