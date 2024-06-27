@@ -38,12 +38,34 @@ void DisplayFreqComponent::paint(juce::Graphics& g)
     } else if (centsDeviation < -3 && centsDeviation > -50) {
         textIndication = textIndication.paddedLeft('>', abs(round(centsDeviation / 5)));
     }
+    juce::String nsdfString;
+    /*if (!audioProcessor.keyMaxima.empty()) {
+        for (int i : audioProcessor.keyMaxima)
+        {
+            nsdfString += juce::String(i) + ", ";
+        }
+    }*/
+    for (auto i = 0; i < 64; i++)
+    {
+        nsdfString += juce::String(audioProcessor.nsdf[i]) + ", ";
+    }
     g.setColour(juce::Colours::white);
+    g.setFont(10.0f);
+    g.drawFittedText(nsdfString, getLocalBounds(), juce::Justification::top, 10);
     g.setFont(15.0f);
     g.drawFittedText(
         "midiNoteName: " + midiNoteName + "\n" +
         "soundLvl: " + juce::String(audioProcessor.getSoundLevel()) + "\n" +
-        "frequency: " + juce::String(audioProcessor.getFundamental())
+        "fundamental: " + juce::String(audioProcessor.getFundamental()) + "\n" +
+        //"fifoIndex: " + juce::String(audioProcessor.getFifoIndex()) + "\n" +
+        //"firstNegIndex: " + juce::String(audioProcessor.getFirstNegIndex()) + "\n" +
+        "tempMaxIdx: " + juce::String(audioProcessor.getLocalMaxIndex()) + "\n" +
+        "highestAmplitude: " + juce::String(audioProcessor.highestKeyMaximum) + "\n" +
+        //"maxThreshold: " + juce::String(audioProcessor.getMaxThreshold()) + "\n" +
+        "pitchPeriod: " + juce::String(audioProcessor.getPitchPeriod()) + "\n" +
+        //"centsDeviation: " + juce::String(centsDeviation) + "\n" +
+        //"exactNoteFreq: " + juce::String(exactNoteFreq) + "\n" +
+        "noteFreqMultiplier: " + juce::String(pow(2.0, (midiNoteNumber - 69) / 12))
         , getLocalBounds(), juce::Justification::centred, 1);
     g.drawFittedText(textIndication, getLocalBounds(), juce::Justification::centredBottom, 1);
 }

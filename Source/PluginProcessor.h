@@ -59,21 +59,44 @@ public:
     //==============================================================================
     float getFundamental();
     float getSoundLevel();
+    float getMaxThreshold();
+    int getFifoIndex();
+    int getPitchPeriod();
+
+    int getFirstNegIndex();
+    int getLocalMaxIndex();
+    float highestKeyMaximum;
+    float nsdf[1024];
+    std::vector<int> keyMaxima;
 
 private:
     //==============================================================================
     void pushNextSampleIntoFifo(float sample);
+    void calculateAutocorrelation();
     void findFundamental();
+    void peakPicking();
 
-    static constexpr auto fftOrder = 15;
+    static constexpr auto fftOrder = 10;
     static constexpr auto fftSize = 1 << fftOrder;
+    static constexpr auto windowSize = 1 << 10;
+    static constexpr auto step = windowSize / 4;
     static constexpr float noiseThreshold = -60;
+    static constexpr float kParam = 0.8;
 
     float soundLevel = 0;
-    juce::dsp::FFT forwardFFT;
+    juce::dsp::FFT fft;
     float fftData[2 * fftSize];
     float fundamentalFrequency = 0;
-    float fifo[fftSize];
+    float fifo[windowSize];
     int fifoIndex = 0;
+
+    int tempMaxIdx = 0;
+    
+    //float acf[windowSize];
+    //float sdf[windowSize];
+    //float keyMaxima[windowSize];
+    float maxThreshold = 0.0;
+    //int firstNegativeNsdfIndex = 0;
+    int pitchPeriod = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SimpleTunerAudioProcessor);
 };

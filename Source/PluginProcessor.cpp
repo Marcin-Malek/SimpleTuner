@@ -20,7 +20,7 @@ SimpleTunerAudioProcessor::SimpleTunerAudioProcessor()
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        ),
-                        forwardFFT(fftOrder),
+                        fft(fftOrder),
                         fifo{},
                         fftData{},
                         fundamentalFrequency(0),
@@ -154,9 +154,9 @@ void SimpleTunerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     soundLevel = juce::Decibels::gainToDecibels(buffer.getRMSLevel(0, 0, buffer.getNumSamples()));
 
     if (soundLevel > noiseThreshold) {
-    for (auto i = 0; i < buffer.getNumSamples(); ++i) {
-        // Since it is a tuner plugin only mono signal is needed
-        pushNextSampleIntoFifo(buffer.getReadPointer(0)[i]);
+        for (auto i = 0; i < buffer.getNumSamples(); ++i) {
+            // Since it is a tuner plugin only mono signal is needed
+            pushNextSampleIntoFifo(buffer.getReadPointer(0)[i]);
         }
     }
 }
@@ -169,32 +169,165 @@ float SimpleTunerAudioProcessor::getSoundLevel() {
     return soundLevel;
 }
 
+int SimpleTunerAudioProcessor::getFifoIndex() {
+    return fifoIndex;
+}
+
+float SimpleTunerAudioProcessor::getMaxThreshold() {
+    return maxThreshold;
+}
+
+int SimpleTunerAudioProcessor::getPitchPeriod() {
+    return pitchPeriod;
+}
+
+int SimpleTunerAudioProcessor::getLocalMaxIndex() {
+    return tempMaxIdx;
+}
+
+//int SimpleTunerAudioProcessor::getFirstNegIndex() {
+//    return firstNegativeNsdfIndex;
+//}
+
 void SimpleTunerAudioProcessor::pushNextSampleIntoFifo(float sample) {
-    if (fifoIndex == fftSize)
+    fifo[fifoIndex++] = sample;
+
+    if (fifoIndex == windowSize)
     {
         juce::zeromem(fftData, sizeof(fftData));
         memcpy(fftData, fifo, sizeof(fifo));
         findFundamental();
-        fifoIndex = 0;
+        fifoIndex = windowSize - step;
+    }
+}
+
+void SimpleTunerAudioProcessor::peakPicking()
+{
+    int pos = 1;
+
+    while (pos < (windowSize - 1) && nsdf[pos - 1] <= 0.0 && nsdf[pos] > 0.0) {
+        pos++;
     }
 
-    fifo[fifoIndex++] = sample;
+    while (pos < windowSize - 1)
+    {
+        if (nsdf[pos] > nsdf[pos - 1] && nsdf[pos] >= nsdf[pos + 1] &&
+            (tempMaxIdx == 0 || nsdf[pos] > nsdf[tempMaxIdx]))
+        {
+            tempMaxIdx = pos;
+        }
+        pos++;
+        if (pos < windowSize - 1 && nsdf[pos] <= 0)
+        {
+            if (tempMaxIdx > 0)
+            {
+                keyMaxima.push_back(tempMaxIdx);
+                tempMaxIdx = 0;
+            }
+            while (pos < windowSize - 1 && nsdf[pos] <= 0.0)
+            {
+                pos++;
+            }
+        }
+    }
+    if (tempMaxIdx > 0)
+    {
+        keyMaxima.push_back(tempMaxIdx);
+    }
+}
+
+void SimpleTunerAudioProcessor::calculateAutocorrelation() 
+{
+    fft.performRealOnlyForwardTransform(fftData, true);
+
+    // [R,I,R,I,...] - fftData
+    for (auto i = 1; i < (fftSize / 2) + 1; i = i + 2) {
+        //fftData[i - 1] = (fftData[i - 1] * fftData[i - 1]) - (fftData[i] * -fftData[i]); // real
+        //fftData[i] = (fftData[i - 1] * -fftData[i]) + (fftData[i - 1] * fftData[i]); // imaginary
+
+        fftData[i - 1] = ((fftData[i - 1] * fftData[i - 1]) - (fftData[i] * -fftData[i])) * (1/(2*fftSize)); // real
+        fftData[i] = ((fftData[i - 1] * -fftData[i]) + (fftData[i - 1] * fftData[i])) * (1 / (2 * fftSize)); // imaginary
+    }
+
+    fft.performRealOnlyInverseTransform(fftData);
+    memcpy(nsdf, fftData, fftSize * 2);
+    //nsdf.assign(fftData, fftData + 512);
 }
 
 void SimpleTunerAudioProcessor::findFundamental()
 {
-    forwardFFT.performFrequencyOnlyForwardTransform(fftData);
+    calculateAutocorrelation();
+    peakPicking();
+    std::vector<std::pair<float, float>> estimates;
 
-    float maxMagnitude = 0.0f;
-    int peakFrequencyIndex = 0;
+    highestKeyMaximum = 0;
 
-    for (int i = 0; i < fftSize * 2; ++i) {
-        if (fftData[i] > maxMagnitude) {
-            maxMagnitude = fftData[i];
-            peakFrequencyIndex = i;
+    for (int i : keyMaxima)
+    {
+        highestKeyMaximum = std::max(highestKeyMaximum, nsdf[i]);
+        /*if (nsdf[i] > 0)
+        {
+            auto x = parabolicInterpolation(nsdf, i);
+            estimates.push_back(x);
+            highest_amplitude = std::max(highest_amplitude, std::get<1>(x));
+        }*/
+    }
+
+    if (keyMaxima.empty())
+        fundamentalFrequency = -1;
+
+    maxThreshold = kParam * highestKeyMaximum;
+
+    for (int i : keyMaxima)
+    {
+        if (nsdf[i] >= maxThreshold)
+        {
+            pitchPeriod = i;
+            break;
         }
     }
-    fundamentalFrequency = peakFrequencyIndex * getSampleRate() / fftSize;
+
+
+
+    //juce::zeromem(acf, sizeof(acf));
+    //juce::zeromem(sdf, sizeof(sdf));
+    //juce::zeromem(nsdf, sizeof(nsdf));
+    //juce::zeromem(keyMaxima, sizeof(keyMaxima));
+    //firstNegativeNsdfIndex = -1;
+    //tempMaxIdx = -1;
+
+    /*for (auto i = 0; i < windowSize - 1; ++i)
+    {
+        for (auto j = 1; j < windowSize - i; ++j) {
+            acf[i] += fifo[j] * fifo[i + j];
+            sdf[i] += fifo[j] * fifo[j] + fifo[i + j] * fifo[i + j];
+        }
+        nsdf[i] = (2.0f * acf[i + 1]) / sdf[i + 1];
+        firstNegativeNsdfIndex = nsdf[i];
+        if (firstNegativeNsdfIndex == -1 && nsdf[i] < 0) {
+            firstNegativeNsdfIndex = i;
+        }
+        else if (firstNegativeNsdfIndex != -1 && nsdf[i] > 0) {
+            if (tempMaxIdx < firstNegativeNsdfIndex || nsdf[tempMaxIdx] < nsdf[i]) {
+                tempMaxIdx = i;
+            }
+        }
+        else if (firstNegativeNsdfIndex != -1 && nsdf[i] < 0 && tempMaxIdx > 0) {
+            keyMaxima[tempMaxIdx] = nsdf[tempMaxIdx];
+            tempMaxIdx = -1;
+        }
+    }*/
+
+    /*highestKeyMaximum = std::max_element(std::begin(keyMaxima), std::end(keyMaxima));
+    maxThreshold = *highestKeyMaximum * kParam;
+    pitchPeriod = std::distance(
+        std::begin(keyMaxima),
+        std::find_if(std::begin(keyMaxima), std::end(keyMaxima), [this](float maximum) {
+            return maximum > maxThreshold;
+        })
+    );*/
+
+    fundamentalFrequency = getSampleRate() / pitchPeriod;
 }
 
 //==============================================================================
