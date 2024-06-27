@@ -58,6 +58,7 @@ public:
 
     //==============================================================================
     float getFundamental();
+    float getSoundLevel();
 
 private:
     //==============================================================================
@@ -66,11 +67,13 @@ private:
 
     static constexpr auto fftOrder = 15;
     static constexpr auto fftSize = 1 << fftOrder;
+    static constexpr float noiseThreshold = -60;
 
+    float soundLevel = 0;
     juce::dsp::FFT forwardFFT;
     float fftData[2 * fftSize];
-    float fundamentalFrequency;
+    float fundamentalFrequency = 0;
     float fifo[fftSize];
-    int fifoIndex;
+    int fifoIndex = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SimpleTunerAudioProcessor);
 };

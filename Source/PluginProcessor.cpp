@@ -150,14 +150,23 @@ void SimpleTunerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 		buffer.clear(i, 0, buffer.getNumSamples());
 	}
 
+    // dBFS
+    soundLevel = juce::Decibels::gainToDecibels(buffer.getRMSLevel(0, 0, buffer.getNumSamples()));
+
+    if (soundLevel > noiseThreshold) {
     for (auto i = 0; i < buffer.getNumSamples(); ++i) {
         // Since it is a tuner plugin only mono signal is needed
         pushNextSampleIntoFifo(buffer.getReadPointer(0)[i]);
+        }
     }
 }
 
 float SimpleTunerAudioProcessor::getFundamental() {
     return fundamentalFrequency;
+}
+
+float SimpleTunerAudioProcessor::getSoundLevel() {
+    return soundLevel;
 }
 
 void SimpleTunerAudioProcessor::pushNextSampleIntoFifo(float sample) {
